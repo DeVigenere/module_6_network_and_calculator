@@ -1,10 +1,8 @@
 #include "Calculator.h"
 #include <iostream>
-#include <string>
 #include <sstream>
 #include <iomanip>
 #include <chrono>
-#include <ctime>
 #include <thread>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -35,37 +33,48 @@ bool initWinsock() {
     return true;
 }
 
+std::string catchfullrecv(SOCKET sock) {
+    std::string response;
+    char buffer[BUFFER_SIZE] = { 0 };
+    while (true) {
+        memset(buffer, 0, BUFFER_SIZE);
+        int bytes = recv(sock, buffer, BUFFER_SIZE - 1, 0);
+        if (bytes <= 0) { //if nothing
+            break;
+        }
+        response += std::string(buffer, bytes);
+        if (bytes < BUFFER_SIZE - 1) { //we got everything we need
+            break;
+        }
+    }
+    if (!response.empty()) {
+        std::cout << "server response: " << response << std::endl;
+    }
+    return response;
+}
+
 bool sendMessage(const std::string& message) {
     SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == INVALID_SOCKET) {
         std::cerr << "error create socket" << std::endl;
         return false;
     }
-
     sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(PORT);
     serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
     if (connect(sock, (sockaddr*)&serv_addr, sizeof(serv_addr)) == SOCKET_ERROR) {
         std::cerr << "error connect to serever(unavailable)" << std::endl;
         closesocket(sock);
         return false;
     }
-
-    int bytes_sent = send(sock, message.c_str(), message.length(), 0);
+    auto bytes_sent = send(sock, message.c_str(), message.length(), 0);
     if (bytes_sent == SOCKET_ERROR) {
         std::cerr << "error sending" << std::endl;
         closesocket(sock);
         return false;
     }
-
-    char buffer[BUFFER_SIZE] = { 0 };
-    int bytes_read = recv(sock, buffer, BUFFER_SIZE - 1, 0);
-    if (bytes_read > 0) {
-        std::cout << "answer server: " << buffer << std::endl;
-    }
-
+    catchfullrecv(sock);
     closesocket(sock);
     return true;
 }
@@ -75,12 +84,10 @@ int main() {
         return 1;
     }
     Calculator calc;
- 
     struct Operation {
         int a, b;
         char op;
     };
-
     Operation ops[] = {
         {10, 5, '+'},
         {20, 4, '-'},
@@ -88,10 +95,8 @@ int main() {
         {15, 3, '/'},
         {8, 0, '/'}
     };
-
     int sent_count = 0;
     int total_ops = sizeof(ops) / sizeof(ops[0]);
-
     for (const auto& op : ops) {
         std::string result;
         try {
@@ -109,32 +114,24 @@ int main() {
                 result = std::to_string(calc.Divide(op.a, op.b));
                 break;
             }
-
             std::string payload = std::to_string(op.a) + " " + op.op + " " +
                 std::to_string(op.b) + " = " + result;
-
             std::string message = buildMessage("calculator", payload);
-
             std::cout << "\nsending: " << message << std::endl;
-
             if (sendMessage(message)) {
                 sent_count++;
             }
             else {
                 std::cerr << "cannot send message" << std::endl;
             }
-
         }
         catch (const std::exception& e) {
             std::cerr << "error calculation: " << e.what() << std::endl;
         }
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(std::chrono::seconds(1)); //for demo
     }
-
     std::cout << "\nsending " << sent_count << " from " << total_ops << " message" << std::endl;
     WSACleanup();
-
     system("pause");
     return 0;
 }

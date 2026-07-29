@@ -54,7 +54,7 @@ void printMessage(const std::string& message) {
 }
 
 DWORD WINAPI handleClient(LPVOID param) {
-    SOCKET client_socket = (SOCKET)param;
+    SOCKET client_socket = static_cast<SOCKET>(reinterpret_cast<INT_PTR>(param));
     char buffer[BUFFER_SIZE] = { 0 };
     std::cout << "new connection" << std::endl;
     while (true) {
@@ -116,7 +116,6 @@ int main() {
     while (true) {
         sockaddr_in client_addr;
         int addrlen = sizeof(client_addr);
-
         SOCKET client_socket = accept(server_fd, (sockaddr*)&client_addr, &addrlen);
         if (client_socket == INVALID_SOCKET) {
             if (true) {
@@ -124,19 +123,14 @@ int main() {
             }
             continue;
         }
-        HANDLE thread = CreateThread(NULL, 0, handleClient, (LPVOID)client_socket, 0, NULL);
+        HANDLE thread = CreateThread(NULL, 0, handleClient, reinterpret_cast<LPVOID>(static_cast<INT_PTR>(client_socket)), 0, NULL);
         if (thread != NULL) {
-            threads.push_back(thread);
+            CloseHandle(thread);
         }
         else {
             std::cerr << "error creating thread" << std::endl;
             closesocket(client_socket);
         }
-    }
-    std::cout << "waiting when close threads" << std::endl;
-    for (HANDLE h : threads) {
-        WaitForSingleObject(h, INFINITE);
-        CloseHandle(h);
     }
     closesocket(server_fd);
     WSACleanup();
