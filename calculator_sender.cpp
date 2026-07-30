@@ -36,15 +36,20 @@ bool initWinsock() {
 std::string catchfullrecv(SOCKET sock) {
     std::string response;
     char buffer[BUFFER_SIZE] = { 0 };
+    int total_bytes = 0;
     while (true) {
         memset(buffer, 0, BUFFER_SIZE);
         int bytes = recv(sock, buffer, BUFFER_SIZE - 1, 0);
-        if (bytes <= 0) { //if nothing
+        if (bytes <= 0) {
             break;
         }
         response += std::string(buffer, bytes);
-        if (bytes < BUFFER_SIZE - 1) { //we got everything we need
-            break;
+        total_bytes += bytes;
+        u_long available = 0;
+        if (ioctlsocket(sock, FIONREAD, &available) == 0) {
+            if (available == 0) {
+                break;
+            }
         }
     }
     if (!response.empty()) {
